@@ -145,5 +145,5 @@ end
 %
 if collectpower
     fprintf(['COLLECTING THE POWER INTO A SINGLE 24-H WINDOW\n'])
-    collect_power_2;
+    collect_power;
 end
