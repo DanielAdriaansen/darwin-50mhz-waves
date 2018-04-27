@@ -18,14 +18,47 @@ clear;
 % Is this break or monsoon processing?
 regime = 'break';
 
+% Path to matfiles
+matpath = '/d1/dadriaan/paper/data/matfiles';
+
+% What vertical level do we want to examine from the 50 MHz for waves? (S-transform)
+Slev = 5000;
+
+% What vertical level do we want to use from the 50 MHz u-wind for monsoon determination?
+% 3000m AGL ~ 700 hPa
+Mlev = 3000;
+
+% What era?
+erastring = 'era_34.mat';
+
+% ***************************************************************************************** Pre-Processing
+% Pre-process the data? (concatenate and make eras)
+% Subflags: concat, eras
+preproc = 0;
+
 % Concatenate data?
 % 1. Read in all netCDF daily files
 % 2. Create MATLAB serial datenums
 % 3. Concatenate the data and write to MAT file
 concat = 1;
 
+% Create the ERAs from the master record?
+eras = 1;
+
+%
+%
 % Update regime times?
-regimeinfo = 1;
+%regimeinfo = 0;
+%
+%
+
+% **************************************************************************************** S-transform Processing
+% Perform the S-stransform processing? (masking, chunks, S-transform)
+% Subflags: maskregime, maskbadprecip, findchunks, maskoutliers, findchunks2, stranspower
+stproc = 1;
+
+% Figure out what regime it is?
+findregime = 1;
 
 % Mask regime?
 % 1. Read in concatendated data
@@ -44,16 +77,16 @@ maskbadprecip = 1;
 findchunks = 1;
 
 % Find outliers and mask these out using a new flag
-maskoutliers = 1;
+maskoutliers = 0;
 
 % Find good chunks again after masking outliers
-findchunks2 = 1;
+findchunks2 = 0;
 
 % Perform the S-transform
 stranspower = 1;
 
 % Collect all the power from each minute into a single 24-hour window representing the current regime
-collectpower = 1;
+collectpower = 0;
 
 %#######################################################################
 
@@ -76,72 +109,106 @@ collectpower = 1;
 %    a. Indices of the begin and end of each chunk for quick indexing for S-Transform later
 % 5. Read in the filtered chunks and then perform the S-Transform on each, collecting the output each time. Write out the collected power to a mat file.
 
-%
-% ******** STEP 1: Concatenate, convert to matfiles, and convert time to serial datenums
-%
-if concat
-    fprintf(['\nCONCATENATING PROFILER DATA\n'])
-    concat_profiler_data;
+% ****************** Pre-Processing
+if preproc
+
+    %
+    % ******** STEP 1: Concatenate, convert to matfiles, and convert time to serial datenums
+    %
+    if concat
+        fprintf(['\nCONCATENATING PROFILER DATA\n'])
+        concat_profiler_data;
+    end
+
+    %
+    % ********* STEP 2: Break up the entire data record into distinct "eras" where there is continuous data
+    %
+    if eras
+        fprintf(['\nCREATING ERAS FROM MASTER RECORD\n'])
+        createEras;
+    end
 end
 
-%
-% ******** STEP 2: Load in the regime beginning and end times
-%
-if regimeinfo
-    fprintf(['DETERMINING TIME INFO BASED ON REGIME\n'])
-    createStartEndLUT;
+
+% ***************** S-transform Processing
+if stproc
+    
+    % Get a list of the matfiles that contain the data for each era. We want to do everything below for each era, so loop.
+    %mfiles = dir([matpath,'/era*.mat']);
+    mfiles = dir([matpath,'/',erastring]);
+    nf = length(mfiles);
+    fprintf(['\nFOUND: ',num2str(nf),' ERA FILES.']);
+    for g=1:nf
+    
+        % Set the current filename
+        currmfile = mfiles(g).name;
+        fprintf(['\n']);
+        fprintf(['PROCESSING MATFILE: ',currmfile,'\n']);
+        fprintf(['\n']);
+                %
+        % ******** STEP 5: Mask out data that was obtained during precipitation, or that has a bad data flag with it
+        %
+        if maskbadprecip
+            fprintf(['MASKING BAD DATA AND PRECIPITATION\n'])
+            mask_bad_precip;
+        end
+        
+        %
+        % ******** STEP 7: Determine outlier points inside the chunks. Mask these out, then find chunks again.
+        %
+        if maskoutliers
+            fprintf(['GROSS OUTLIER REMOVAL\n'])
+            mask_outliers;
+        end
+        
+        %
+        % ******** STEP 3: Identify the regime at each time in the era
+        %
+        if findregime
+            fprintf(['DETERMINING REGIME\n']);
+            identifyRegime;
+        end
+        
+        %
+        % ******** STEP 4: Mask out data outside the current regime that has been requested
+        %
+        if maskregime
+            fprintf(['MASKING DATA OUTSIDE REGIME\n'])
+            mask_regime;
+        end
+        
+        %
+        % ******** STEP 6: Find chunks of data that meet a time minimum defined in this script
+        %
+        if findchunks
+            fprintf(['FINDING CHUNKS\n'])
+            find_chunks;
+        end
+        
+        %
+        % ******** STEP 8: Call the code to find chunks again, now that we've done another filtering
+        %
+        %if findchunks2
+        %    fprintf(['FINDING CHUNKS AGAIN AFTER GROSS OUTLIER REMOVAL\n'])
+        %    find_chunks;
+        %end
+        
+        %
+        % ******** STEP 9: Run the S-Transform on the time series from each chunk
+        %
+        if stranspower
+            fprintf(['CALCULATING THE S-TRANSFORM\n'])
+            strans_power;
+        end
+        
+        % Create summary plots
+        summary_plots;
+    end
 end
 
+% ************ Final Step: Collect power
 %
-% ******** STEP 3: Mask out data outside the current regime that has been requested
-%
-if maskregime
-    fprintf(['MASKING DATA OUTSIDE REGIME\n'])
-    mask_regime;
-end
-
-%
-% ******** STEP 4: Mask out data that was obtained during precipitation, or that has a bad data flag with it
-%
-if maskbadprecip
-    fprintf(['MASKING BAD DATA AND PRECIPITATION\n'])
-    mask_bad_precip;
-end
-
-%
-% ******** STEP 5: Find chunks of data that meet a time minimum defined in this script
-%
-if findchunks
-    fprintf(['FINDING CHUNKS\n'])
-    find_chunks;
-end
-
-%
-% ******** STEP 6: Determine outlier points inside the chunks. Mask these out, then find chunks again.
-%
-if maskoutliers
-    fprintf(['GROSS OUTLIER REMOVAL\n'])
-    mask_outliers;
-end
-
-%
-% ******** STEP 7: Call the code to find chunks again, now that we've done another filtering
-%
-if findchunks2
-    fprintf(['FINDING CHUNKS AGAIN AFTER GROSS OUTLIER REMOVAL\n'])
-    find_chunks;
-end
-
-%
-% ******** STEP 7: Run the S-Transform on the time series from each chunk
-%
-if stranspower
-    fprintf(['CALCULATING THE S-TRANSFORM\n'])
-    strans_power;
-end
-
-%
-% ******** STEP 8: Collect the power from all minutes of a 24 hour period into a single 24 hour window
+% ******** STEP 10: Collect the power from all minutes of a 24 hour period into a single 24 hour window
 %
 if collectpower
     fprintf(['COLLECTING THE POWER INTO A SINGLE 24-H WINDOW\n'])
