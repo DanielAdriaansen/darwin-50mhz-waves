@@ -13,6 +13,20 @@
 %######################## User Config ##################################%
 
 % Path to matfiles
+%matpath = '/d1/dadriaan/paper/data/matfiles';
+
+currmfile = '/d1/dadriaan/paper/data/matfiles/era_1.mat';
+
+%#######################################################################%
+
+% Load data from MAT file
+load(currmfile,'Datenum','mask','VertVel','agl','regime');
+
+% OLD SCRIPT BELOW
+%{
+%######################## User Config ##################################%
+
+% Path to matfiles
 matpath = '/d1/dadriaan/paper/data/matfiles';
 
 % What is the minimum chunk length we want in minutes?
@@ -111,3 +125,5 @@ save([matpath,'/profiler.mat'],'Datenum','mask','agl','VertVel','chunkbegin','ch
 
 % Clear out variables we don't need
 clear('Datenum','mask','agl','VertVel','tmean','tbeg','tend','badinds','chunkbegin','chunkend','chunklength','regime');
+
+%}
